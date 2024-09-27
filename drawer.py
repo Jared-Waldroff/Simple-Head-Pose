@@ -1,200 +1,126 @@
 import cv2
 import numpy as np
 import math
+import os
 
-# Defining a class that will be used to draw and visualize the results
-# on the images
 
+# Defining a class that will be used to draw and visualize the results on the images
 class Drawer:
 
     def __getinstance(self, image, intype):
-
-        # We check if the image is a string else we assume it is an image
-        # and its already loaded and converted to rgb
+        """Loads image if it's a string path, otherwise returns the image as is."""
         if isinstance(image, intype):
-                
-                # If so, we need to load it a convert it to rgb while flipping it
-                # to increase accuracy (also because bbox are calculated on the flipped img)
-                image = cv2.imread(image)
-                image = cv2.cvtColor(cv2.flip(image, 1), cv2.COLOR_BGR2RGB)
-                return image
-
-        # If the image is already a cv mat, we instead simply return it 
+            # Load and convert image if it is a file path
+            image = cv2.imread(image)
+            image = cv2.cvtColor(cv2.flip(image, 1), cv2.COLOR_BGR2RGB)
+            return image
         return image
 
-
-    # Inner function to draw the bounding boxes on the image
     def __draw(self, image, bbox, color=(0, 255, 0), thickness=2):
-
-        # Extract the bounding box coordinates and draw them on the image
+        """Draws a bounding box on the image."""
         x1, y1, x2, y2 = bbox
         cv2.rectangle(image, (int(x1), int(y1)), (int(x2), int(y2)), color, thickness)
 
-    # Function to draw the bounding boxes on the image
     def draw_bbox(self, image, bbox, color=(255, 200, 20), thickness=2, draw_person=False, draw_face=True):
-
-        # We check the instance of the passed image 
+        """Draws bounding boxes for persons and faces based on the bbox dictionary."""
         image = self.__getinstance(image, str)
-        
-        # We iterate over the bounding boxes dictionary 
-        # and draw the bounding boxes on the image
         for key in bbox.keys():
-
-            # Since for each key (0,1,..N) we have a dictionary of bounding boxes
-            # for the person and face, we iterate over the dictionary to draw
-            # the bounding boxes for both 
-
-            # Check if there are any person key (person can be absent if no detection)
             if "person" in bbox[key]:
-
-                # If draw_person is true, we draw the bounding box around the person
                 if draw_person:
                     self.__draw(image, bbox[key]["person"], color, thickness)
-
-                # We check the same for the face if present
                 if "face" in bbox[key]:
-
-                    # If draw_face is true, we draw the bounding box around the face
                     if draw_face:
                         self.__draw(image, bbox[key]["face"], color, thickness)
+        return cv2.flip(image, 1)
 
-        # Return the flipped image with the bounding boxes drawn
-        return cv2.flip(image,1)
-
-    # Function to draw the landmarks on the image
     def draw_landmarks(self, image, landmarks, color=(255, 0, 0), thickness=2):
-
-        # We check the instance of the passed image
+        """Draws landmarks on the image."""
         image = self.__getinstance(image, str)
-
-        # We iterate over the landmarks list and draw the landmarks on the image
         for lms in landmarks:
-            
-            # We check if the landmarks are valid, if not we continue to the next one   
             if lms is not None:
-
-                # We iterate over the landmarks and draw them on the image
                 for lm in lms:
-
-                    # We extract the landmarks from the created tuple and draw them on the image
                     x, y = lm
-
-                    # then draw the landmark on the image
                     cv2.circle(image, (int(x), int(y)), thickness, color, thickness)
+        return cv2.flip(image, 1)
 
-        # Return the flipped image with the landmarks drawn
-        return cv2.flip(image,1)
-
-    # Function to draw the axis on the whom origin is the nose point
     def draw_axis(self, image, pose, landmarks, bbox, axis_size=50):
-
-        # We check the instance of the passed image
+        """Draws pose axes and orientation text on the image."""
         image = self.__getinstance(image, str)
-
-        # For the number of detected landmarks in that image
         for i, lms in enumerate(landmarks):
-
-            # if the landmarks are valid, we continue
             if lms is not None:
-
-                # We extract the nose point from the landmarks
                 x, y = lms[0]
-
-                # We draw a circle on the nose point
-                # cv2.circle(image, (int(x), int(y)), 2, (255, 0, 0), 2)
-
-                # We extract the pose parameters
                 yaw, pitch, roll = pose[i]
+                yaw = -yaw  # Adjusting yaw
 
-                # We convert the yaw to negative since the axis are flipped: 
-                yaw = -yaw
-
-                # We need now to calculate the rotation matrix R to rotate the axis 
-                # around the origin camera parameters, lets say K. We can do this by
-                # using the Rodrigues formula to convert the rotation vector to a
-                # rotation matrix. We can then use the rotation matrix to rotate the
-                # axis points around the origin. 
+                # Rotation matrix using Rodrigues formula
                 rotation_matrix = cv2.Rodrigues(np.array([pitch, yaw, roll]))[0].astype(np.float64)
-                
-                # We create a list of points representing the axis (in homogeneous coordinates using 
-                # the identity matrix)
                 axes_points = np.array([
-                    [1, 0, 0, 0],
-                    [0, 1, 0, 0],
-                    [0, 0, 1, 0]
+                    [axis_size, 0, 0],
+                    [0, axis_size, 0],
+                    [0, 0, axis_size],
+                    [0, 0, 0]
                 ], dtype=np.float64)
 
-                # We then use the rotation matrix to rotate the axis points around the origin
-                # using the matrix multiplication between the rotation matrix and the axis points
-                axes_points = rotation_matrix @ axes_points
+                # Rotating and translating axis points
+                axes_points = rotation_matrix @ axes_points.T
+                axes_points = (axes_points[:2, :] + np.array([[x], [y]])).astype(int)
 
-                # We then convert the homogeneous coordinates to cartesian coordinates by dividing
-                # each coordinate by the last one (z)
-                axes_points = (axes_points[:2, :] * axis_size).astype(int)
+                # Draw the axes
+                cv2.line(image, tuple(axes_points[:, 3]), tuple(axes_points[:, 0]), (255, 0, 0), 3)
+                cv2.line(image, tuple(axes_points[:, 3]), tuple(axes_points[:, 1]), (0, 255, 0), 3)
+                cv2.line(image, tuple(axes_points[:, 3]), tuple(axes_points[:, 2]), (0, 0, 255), 3)
 
-                # We then displace the axis points by the nose point coordinates
-                axes_points[0, :] = axes_points[0, :] + x
-                axes_points[1, :] = axes_points[1, :] + y
-                
-                # We draw the axis on the image
-                cv2.line(image, tuple(axes_points[:, 3].ravel()), tuple(axes_points[:, 0].ravel()), (255, 0, 0), 3)    
-                cv2.line(image, tuple(axes_points[:, 3].ravel()), tuple(axes_points[:, 1].ravel()), (0, 255, 0), 3)    
-                cv2.line(image, tuple(axes_points[:, 3].ravel()), tuple(axes_points[:, 2].ravel()), (0, 0, 255), 3)
-
-                # Then we draw the text on the imageS
-                text = ""
-                
-                # Analyze the pose parameters to see where the user is looking
-                # If the pitch is greater than 0.3, the user is looking up
+                # Determine where the person is looking based on yaw/pitch
+                text = "FRONT"
                 if pitch > 0.3:
                     text = 'UP'
-
-                # If the pitch is lower than -0.3, the user is looking down
                 elif pitch < -0.3:
                     text = 'DOWN'
-
-                # If the yaw is greater than 0.3, the user is looking left
                 elif yaw > 0.3:
                     text = 'LEFT'
-
-                # If the yaw is lower than -0.3, the user is looking right
                 elif yaw < -0.3:
                     text = 'RIGHT'
-                
-                # If the user is not looking in any direction, the user is looking forward
-                else:
-                    text = 'FRONT'
 
-                # We check if the index is present into the bbox dictionary
-                if i in bbox: 
+                # Draw orientation text on the image
+                if i in bbox and "face" in bbox[i]:
+                    x1, y1, x2, y2 = bbox[i]["face"]
+                    cv2.rectangle(image, (int(x1), int(y1)), (int(x1) + 80, int(y1) - 30), (255, 200, 20), -1)
+                    cv2.putText(image, text, (int(x1), int(y1) - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255), 2)
 
-                    # We now check if the key face is present in the bbox dictionary
-                    if "face" in bbox[i]:
+                    # Display yaw, pitch, and roll angles
+                    yaw_deg = math.degrees(math.asin(math.sin(yaw)))
+                    pitch_deg = math.degrees(math.asin(math.sin(pitch)))
+                    roll_deg = math.degrees(math.asin(math.sin(roll)))
 
-                        # If so, we extract the face bounding box coordinates
-                        x1, y1, x2, y2 = bbox[i]["face"]
+                    cv2.putText(image, f"yaw: {yaw_deg:.2f}", (int(x2) + 1, int(y1) + 15), cv2.FONT_HERSHEY_SIMPLEX,
+                                0.75, (0, 255, 0), 2)
+                    cv2.putText(image, f"pitch: {pitch_deg:.2f}", (int(x2) + 1, int(y1) + 40), cv2.FONT_HERSHEY_SIMPLEX,
+                                0.75, (255, 0, 0), 2)
+                    cv2.putText(image, f"roll: {roll_deg:.2f}", (int(x2) + 1, int(y1) + 65), cv2.FONT_HERSHEY_SIMPLEX,
+                                0.75, (0, 0, 255), 2)
 
-                        # We draw a rectangle starting from the top left corner of the face
-                        # that will contain the text of the direction the user is looking at
-                        cv2.rectangle(image, (int(x1), int(y1)), (int(x1)+80, int(y1)-30), (255, 200, 20), -1)
-
-                        # Build the text to display
-                        cv2.putText(image, text, (int(x1), int(y1)-5), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255), 2)
-
-                        # We convert the pitch, yaw and roll to degrees 
-                        yaw = math.degrees(math.asin(math.sin(yaw)))
-                        pitch = math.degrees(math.asin(math.sin(pitch)))
-                        roll = math.degrees(math.asin(math.sin(roll)))
-                        
-                        # Display the yaw right under to the top right corner of the face
-                        cv2.putText(image, "yaw: {:.2f}".format(yaw), (int(x2)+1, int(y1)+15), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 0), 2)
-
-                        # Display the pitch under the yaw
-                        cv2.putText(image, "pitch: {:.2f}".format(pitch), (int(x2)+1, int(y1)+40), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 0, 0), 2)
-
-                        # Display the roll under the pitch
-                        cv2.putText(image, "roll: {:.2f}".format(roll), (int(x2)+1, int(y1)+65), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 0, 255), 2)
-
-
-        # We return a resize image (1280x720)
         return image
+
+
+# Testing the Drawer class with a sample image and bounding box
+if __name__ == "__main__":
+    drawer = Drawer()
+    test_image_path = "path_to_your_image.jpg"
+    if os.path.exists(test_image_path):
+        test_image = cv2.imread(test_image_path)
+        # Example bounding box and landmarks (replace with actual data)
+        bbox = {0: {"person": [50, 50, 200, 400], "face": [80, 100, 150, 180]}}
+        landmarks = [[(100, 120), (120, 150), (110, 160)]]
+        pose = [(0.2, 0.1, 0.3)]
+        # Draw bounding boxes
+        drawn_image = drawer.draw_bbox(test_image, bbox)
+        # Draw landmarks
+        drawn_image = drawer.draw_landmarks(drawn_image, landmarks)
+        # Draw axis
+        drawn_image = drawer.draw_axis(drawn_image, pose, landmarks, bbox)
+        # Display the result
+        cv2.imshow("Drawn Image", drawn_image)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+    else:
+        print(f"Image not found at path: {test_image_path}")

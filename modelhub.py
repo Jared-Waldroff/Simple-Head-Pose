@@ -1,35 +1,32 @@
 import posemodels
 
-# This file is created with the sole purpose of making the code more readable and
-# easier to maintain. The models library is a collection of classes that implement
-# the models that are used in the project. If someone wants to add a new model,
-# they can add it to the posemodels library and then add a new if statement in the
-# load function to load the model based on the given model name. This way we
-# can avoid having a huge if-else statement in the hpe.py file and we can keep
-# the code clean and readable.
-# The only real requirement is that the new model implemented must have three 
-# fundamental functions: train, eval and predict!
-# - The train function should train the model based on the given training data (and assign the 
-#   best model to its class instance to make predictions; see the model class for further reference).
-# - The eval function should evaluate the model based on the given test data (print results).
-# - The predict function should return, given an image, the pose parameters and its landmark.
-# Thats it!
 
-# Function to load a model from the models library based on the given model name
 def load(model_name, mesh_type="mp", mesh_conf=0.5, mesh_iou=0.5):
+    """
+    Load and return a model based on the given model name.
 
-    # If the model name is svr
-    if model_name == "svr":
+    Parameters:
+    - model_name (str): Name of the model to load (e.g., "svr", "xgboost").
+    - mesh_type (str): Type of mesh to use (default is "mp" for MediaPipe).
+    - mesh_conf (float): Confidence threshold for the mesh model (default is 0.5).
+    - mesh_iou (float): IoU threshold for the mesh model (default is 0.5).
 
-        # We return a svr model
-        return posemodels.Regressor(model_name, mesh_type, mesh_conf, mesh_iou) 
-    
-    # If the model name is xgboost
-    elif model_name == "xgboost":
+    Returns:
+    - A model instance from the posemodels library.
+    """
 
-        # We return a xgboost model
-        return posemodels.Regressor(model_name, mesh_type, mesh_conf, mesh_iou)
+    # Dictionary mapping model names to their respective classes in posemodels
+    model_map = {
+        "svr": posemodels.Regressor,
+        "xgboost": posemodels.Regressor
+        # Add other models here as needed
+    }
 
-    # ELIF: Other models can be added here if implemented in the models library
-    # elif model_name == "other_model":
-    #    return models.OtherModel(model_name_if_needed)
+    # Check if the model name is supported
+    if model_name in model_map:
+        return model_map[model_name](model_name, mesh_type, mesh_conf, mesh_iou)
+    else:
+        raise ValueError(f"Unsupported model name: {model_name}. Available models are: {list(model_map.keys())}")
+
+# Usage Example:
+# model = load("svr", mesh_type="mp", mesh_conf=0.25, mesh_iou=0.45)

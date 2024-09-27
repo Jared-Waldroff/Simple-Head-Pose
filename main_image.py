@@ -1,26 +1,41 @@
 import hpe
 import cv2
+import os
 
-# Creating an instance of the hpe and drawer model
+# Initialize the head pose estimation model
 model = hpe.SimplePose(model_type="svr")
 
-# Train the model with the given dataset folder
-#model.train("AFLW2000", save=True, split=0.1, ext="jpg")
+# Check if the model exists before loading
+model_path = "best_model_svr_23_01_24_17"
+if not os.path.exists(model_path):
+    raise FileNotFoundError(f"Model file '{model_path}' not found. Please ensure the model is available.")
+else:
+    # Load the pretrained model
+    model.load(model_path)
 
-# Load a pretrained model from the trained folder
-model.load("best_model_svr_23_01_24_17")
+# Define the image path
+image_path = "examples/faces_3.png"
 
-# Load an image from the given path
-image = cv2.imread("examples/faces_3.png")
+# Check if the image exists before loading
+if not os.path.exists(image_path):
+    raise FileNotFoundError(f"Image file '{image_path}' not found. Please ensure the image is available.")
+else:
+    # Load and preprocess the image
+    image = cv2.imread(image_path)
+    image = cv2.cvtColor(cv2.flip(image, 1), cv2.COLOR_BGR2RGB)
 
-# Flip the image horizontally for a later selfie-view display
-# Also convert the color space from BGR to RGB
-image = cv2.cvtColor(cv2.flip(image, 1), cv2.COLOR_BGR2RGB)
+    # Predict poses, landmarks, and bounding boxes
+    poses, lms, bbox = model.predict(image)
 
-# Get the result
-poses, lms, bbox = model.predict(image)
+    # Draw the results on the image
+    drawn_image = model.draw(image, poses, lms, bbox, draw_face=True, draw_person=False, draw_axis=True)
 
-# Draw the results on the image
-cv2.imshow("Image", model.draw(image, poses, lms, bbox, draw_face=True, draw_person=False, draw_axis=True))
-cv2.imwrite("example.png", model.draw(image, poses, lms, bbox, draw_face=True, draw_person=False, draw_axis=True))
-cv2.waitKey(0)
+    # Display the result
+    cv2.imshow("Image", drawn_image)
+
+    # Save the result as an example image
+    cv2.imwrite("example.png", drawn_image)
+
+    # Wait for key press and close the window
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
