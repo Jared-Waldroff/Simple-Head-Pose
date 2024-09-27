@@ -4,7 +4,7 @@ import numpy as np
 
 
 class Detector:
-    def __init__(self, confidence=0.25, iou=0.45):
+    def __init__(self, confidence=0.2, iou=0.4):
         try:
             # Load the YOLOv5 generic model for person detection
             self.pmodel = torch.hub.load('ultralytics/yolov5', 'yolov5l')

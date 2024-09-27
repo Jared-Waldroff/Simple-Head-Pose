@@ -71,15 +71,15 @@ class Drawer:
                 cv2.line(image, tuple(axes_points[:, 3]), tuple(axes_points[:, 2]), (0, 0, 255), 3)
 
                 # Determine where the person is looking based on yaw/pitch
-                text = "FRONT"
+                text = "Engaged"
                 if pitch > 0.3:
-                    text = 'UP'
+                    text = 'Not Engaged'
                 elif pitch < -0.3:
-                    text = 'DOWN'
+                    text = 'Not Engaged'
                 elif yaw > 0.3:
-                    text = 'LEFT'
+                    text = 'Not Engaged'
                 elif yaw < -0.3:
-                    text = 'RIGHT'
+                    text = 'Not Engaged'
 
                 # Draw orientation text on the image
                 if i in bbox and "face" in bbox[i]:
